@@ -1,0 +1,143 @@
+# This is a sample Python script.
+# Press Shift+F10 to execute it or replace it with your code.
+# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
+
+def print_hi(name):
+    # Use a breakpoint in the code line below to debug your script.
+    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
+
+# Press the green button in the gutter to run the script.
+if __name__ == '__main__':
+    print_hi('PyCharm')
+
+#1. 导入必要的模块
+import tkinter as tk
+from tkinter import messagebox
+import random
+from math import sin, cos, pi, log
+
+#2. 定义全局常量和配置
+WIDTH = 888
+HEIGHT = 500
+HEART_CENTER_X = WIDTH / 2
+HEART_CENTER_Y = HEIGHT / 2
+HEART_SIDE_LENGTH = 11
+HEART_COLOR = "pink"  # 爱心颜色，可以修改
+
+#3. 定义辅助函数
+def heart_function(t, shrink_ratio: float = HEART_SIDE_LENGTH):
+    """使用参数方程计算爱心曲线上点的坐标"""
+    x = 16 * (sin(t) ** 3)
+    y = -(13 * cos(t) - 5 * cos(2 * t) - 2 * cos(3 * t) - cos(4 * t))
+    # 这里原来 == 是bug，改成 * 缩放
+    x *= shrink_ratio
+    y *= shrink_ratio
+    x += HEART_CENTER_X
+    y += HEART_CENTER_Y
+    return int(x), int(y)
+
+def scatter_inside(x, y, beta=0.15):
+    """在指定点 (x, y) 附近随机散布一个新点，用于生成爱心内部的填充点"""
+    ratio_x = -beta * log(random.random())
+    ratio_y = -beta * log(random.random())
+    dx = ratio_x * (x - HEART_CENTER_X)
+    dy = ratio_y * (y - HEART_CENTER_Y)
+    return x - dx, y - dy
+
+def shrink(x, y, ratio):
+    """计算点 (x, y) 向爱心中心收缩后的位置"""
+    # 修复括号匹配错误
+    force = -1 / (((x - HEART_CENTER_X) ** 2 + (y - HEART_CENTER_Y) ** 2) ** 0.6)
+    dx = ratio * force * (x - HEART_CENTER_X)
+    dy = ratio * force * (y - HEART_CENTER_Y)
+    return x - dx, y - dy
+
+def curve(p):
+    """生成一个周期性的平滑曲线，用于控制动画的缩放节奏"""
+    return 2 * (2 * sin(4 * p)) / (2 * pi)
+
+#4. 定义核心动画类
+class Heart:
+    """爱心动画的核心类，负责生成和管理所有粒子点"""
+    def __init__(self, generate_frame=20):
+        self._points = set()  # 原始爱心轮廓点集合
+        self._edge_diffusion_points = set()  # 边缘扩散效果点集合
+        self._center_diffusion_points = set()  # 中心扩散效果点集合
+        self.all_points = {}  # 存储每帧所有点的坐标和大小
+        self.generate_frame = generate_frame
+        # 初始化点集
+        self._build(2000)
+        # 预计算每一帧的点位置
+        for frame in range(generate_frame):
+            self._calc(frame)
+
+    def _build(self, number):
+        # 构建初始的点集
+        # 生成爱心轮廓点
+        for _ in range(number):
+            t = random.uniform(0, 2 * pi)
+            x, y = heart_function(t)
+            self._points.add((x, y))
+
+        # 边缘扩散粒子
+        for x, y in list(self._points):
+            for _ in range(3):
+                xx, yy = scatter_inside(x, y, beta=0.05)
+                self._edge_diffusion_points.add((xx, yy))
+
+        # 中心填充粒子
+        point_list = list(self._points)
+        for _ in range(4000):
+            x, y = random.choice(point_list)
+            xx, yy = scatter_inside(x, y, beta=0.17)
+            self._center_diffusion_points.add((xx, yy))
+
+    @staticmethod
+    def _calc_position(x, y, ratio):
+        """计算粒子波动位置"""
+        force = -1 / (((x - HEART_CENTER_X) ** 2 + (y - HEART_CENTER_Y) ** 2) ** 0.420)
+        dx = ratio * force * (x - HEART_CENTER_X) + random.randint(-1, 1)
+        dy = ratio * force * (y - HEART_CENTER_Y) + random.randint(-1, 1)
+        return x - dx, y - dy
+
+    def _calc(self, frame):
+        ratio = curve(frame / 10 * pi)
+        all_points = []
+        # 轮廓点
+        for x, y in self._points:
+            x, y = self._calc_position(x, y, ratio)
+            all_points.append((x, y, 2))
+        # 边缘扩散点
+        for x, y in self._edge_diffusion_points:
+            x, y = self._calc_position(x, y, ratio)
+            all_points.append((x, y, 1))
+        # 中心点
+        for x, y in self._center_diffusion_points:
+            x, y = self._calc_position(x, y, ratio)
+            all_points.append((x, y, 1))
+        self.all_points[frame] = all_points
+
+    def render(self, canvas, frame):
+        """绘制当前帧到画布"""
+        for x, y, size in self.all_points[frame % self.generate_frame]:
+            canvas.create_rectangle(x, y, x+size, y+size, fill=HEART_COLOR, outline=HEART_COLOR)
+
+
+# 动画启动代码
+def draw(root: tk.Tk, canvas: tk.Canvas, heart: Heart, frame=0):
+    canvas.delete("all")
+    heart.render(canvas, frame)
+    root.after(100, draw, root, canvas, heart, frame + 1)
+
+
+if __name__ == '__main__':
+    root = tk.Tk()
+    root.title("爱心粒子动画")
+    canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg="black")
+    canvas.pack()
+    heart_anim = Heart(generate_frame=20)
+    draw(root, canvas, heart_anim)
+    root.mainloop()
+
+
+
